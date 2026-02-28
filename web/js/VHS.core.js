@@ -1215,6 +1215,10 @@ function addPreviewOptions(nodeType) {
             fitHeight(this);
 
         }});
+        const autoHideDesc = (this.properties.alwaysShowPreview ? "Show preview on hover" : "Always show preview");
+        optNew.push({content: autoHideDesc, callback: () => {
+            this.properties.alwaysShowPreview = !this.properties.alwaysShowPreview;
+        }});
         optNew.push({content: "Sync preview", callback: () => {
             //TODO: address case where videos have varying length
             //Consider a system of sync groups which are opt-in?
@@ -1610,8 +1614,7 @@ function inner_value_change(widget, value, node, pos) {
 }
 function drawAnnotated(ctx, node, widget_width, y, H) {
   const litegraph_base = LiteGraph
-  // In vueNodes mode, always show text since Vue renders at 1:1 scale
-  const show_text = LiteGraph.vueNodesMode || app.canvas.ds.scale >= (app.canvas.low_quality_zoom_threshold ?? 0.5)
+  const show_text = app.canvas.ds.scale >= (app.canvas.low_quality_zoom_threshold ?? 0.5)
   const margin = 15
   ctx.strokeStyle = litegraph_base.WIDGET_OUTLINE_COLOR
   ctx.fillStyle = litegraph_base.WIDGET_BGCOLOR
@@ -2058,6 +2061,36 @@ app.registerExtension({
             addPreviewOptions(nodeType);
             addFormatWidgets(nodeType, nodeData);
             addVAEInputToggle(nodeType, nodeData)
+            chainCallback(nodeType.prototype, "onNodeCreated", function() {
+                this.properties.alwaysShowPreview = false;
+                const previewWidget = this.widgets?.find((w) => w.name === "videopreview");
+                if (previewWidget) {
+                    previewWidget.value.hidden = true;
+                    previewWidget.parentEl.hidden = true;
+                    previewWidget.videoEl.pause();
+                }
+            });
+            chainCallback(nodeType.prototype, "onMouseEnter", function() {
+                const previewWidget = this.widgets?.find((w) => w.name === "videopreview");
+                if (previewWidget) {
+                    previewWidget.value.hidden = false;
+                    previewWidget.parentEl.hidden = false;
+                    if (!previewWidget.value.paused) {
+                        previewWidget.videoEl.play();
+                    }
+                }
+            });
+            chainCallback(nodeType.prototype, "onMouseLeave", function() {
+                const alwaysShow = this.properties.alwaysShowPreview ?? false;
+                if (!alwaysShow) {
+                    const previewWidget = this.widgets?.find((w) => w.name === "videopreview");
+                    if (previewWidget) {
+                        previewWidget.value.hidden = true;
+                        previewWidget.parentEl.hidden = true;
+                        previewWidget.videoEl.pause();
+                    }
+                }
+            });
         } else if (nodeData?.name == "VHS_SaveImageSequence") {
             //Disabled for safety as VHS_SaveImageSequence is not currently merged
             //addDateFormating(nodeType, "directory_name", timestamp_widget=true);
